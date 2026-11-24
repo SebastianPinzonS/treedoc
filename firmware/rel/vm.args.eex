@@ -3,6 +3,11 @@
 ## Do not set -name or -sname here. Prefer configuring them at runtime
 ## Configure -setcookie in the mix.exs release section or at runtime
 
+## Shared laboratory distribution settings. Keep the default net_ticktime.
+-kernel inet_dist_listen_min 4218
+-kernel inet_dist_listen_max 4228
+-kernel prevent_overlapping_partitions false
+
 ## Number of dirty schedulers doing IO work (file, sockets, and others)
 ##+SDio 5
 

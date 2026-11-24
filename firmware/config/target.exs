@@ -46,12 +46,6 @@ keys =
 if keys == [], do: raise("TREEDOC_SSH_KEYS must contain public SSH keys")
 config :nerves_ssh, authorized_keys: keys
 
-# Shared laboratory distribution settings. Keep the default net_ticktime.
-config :kernel,
-  inet_dist_listen_min: 4218,
-  inet_dist_listen_max: 4228,
-  prevent_overlapping_partitions: false
-
 # Configure the network using vintage_net
 #
 # Update regulatory_domain to your 2-letter country code E.g., "US"

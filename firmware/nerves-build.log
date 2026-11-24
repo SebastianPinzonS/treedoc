@@ -1,0 +1,42 @@
+==> nerves
+warning: the absolute path to the Makefile for this project contains spaces. Make might not work properly if spaces are present in the path. The absolute path is: "/Users/dominictobler/Documents/UZH/HS26/Concurrencia, Paralelismo y Distribucion/treedoc/firmware/deps/nerves"
+
+  (elixir_make 0.10.1) lib/elixir_make/compiler.ex:82: ElixirMake.Compiler.make/2
+  (elixir_make 0.10.1) lib/elixir_make/compiler.ex:53: ElixirMake.Compiler.compile/1
+  (mix 1.20.0) lib/mix/task.ex:502: anonymous fn/3 in Mix.Task.run_task/5
+  (mix 1.20.0) lib/mix/task.compiler.ex:299: Mix.Task.Compiler.run_compiler/2
+  (mix 1.20.0) lib/mix/task.compiler.ex:287: Mix.Task.Compiler.run/4
+  (mix 1.20.0) lib/mix/tasks/compile.all.ex:75: Mix.Tasks.Compile.All.do_run/2
+
+Makefile:55: warning: overriding commands for target `/Users/dominictobler/Documents/UZH/HS26/Concurrencia,'
+Makefile:51: warning: ignoring old commands for target `/Users/dominictobler/Documents/UZH/HS26/Concurrencia,'
+Makefile:55: warning: overriding commands for target `Paralelismo'
+Makefile:51: warning: ignoring old commands for target `Paralelismo'
+Makefile:55: warning: overriding commands for target `y'
+Makefile:51: warning: ignoring old commands for target `y'
+Makefile:59: warning: overriding commands for target `/Users/dominictobler/Documents/UZH/HS26/Concurrencia,'
+Makefile:55: warning: ignoring old commands for target `/Users/dominictobler/Documents/UZH/HS26/Concurrencia,'
+Makefile:59: warning: overriding commands for target `Paralelismo'
+Makefile:55: warning: ignoring old commands for target `Paralelismo'
+Makefile:59: warning: overriding commands for target `y'
+Makefile:55: warning: ignoring old commands for target `y'
+Makefile:58: target `/Users/dominictobler/Documents/UZH/HS26/Concurrencia,' given more than once in the same rule.
+Makefile:58: target `Paralelismo' given more than once in the same rule.
+Makefile:58: target `y' given more than once in the same rule.
+make: Circular /Users/dominictobler/Documents/UZH/HS26/Concurrencia, <- /Users/dominictobler/Documents/UZH/HS26/Concurrencia, dependency dropped.
+make: Circular Paralelismo <- /Users/dominictobler/Documents/UZH/HS26/Concurrencia, dependency dropped.
+make: Circular Paralelismo <- Paralelismo dependency dropped.
+make: Circular y <- /Users/dominictobler/Documents/UZH/HS26/Concurrencia, dependency dropped.
+make: Circular y <- Paralelismo dependency dropped.
+make: Circular y <- y dependency dropped.
+HOST_CC port.o
+error: unable to open output file 'Distribucion/treedoc/firmware/_build/rpi4_dev/lib/nerves/obj/port.o': 'No such file or directory'
+1 error generated.
+make: *** [Distribucion/treedoc/firmware/_build/rpi4_dev/lib/nerves/obj/port.o] Error 1
+could not compile dependency :nerves, "mix compile" failed. Errors may have been logged above. You can recompile this dependency with "mix deps.compile nerves --force", update it with "mix deps.update nerves" or clean it with "mix deps.clean nerves"
+==> tree_doc_firmware
+** (Mix) Could not compile with "make" (exit status: 2).
+You need to have gcc and make installed. Try running the
+commands "gcc --version" and / or "make --version". If these programs
+are not installed, you will be prompted to install them.
+
