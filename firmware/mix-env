@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+
+if [[ ! -f .env ]]; then
+  echo 'Missing firmware/.env: copy .env.example to .env and fill in your values.' >&2
+  exit 1
+fi
+
+# .env is a trusted local file containing Bash assignments.
+set -a
+source ./.env
+set +a
+exec mix "$@"

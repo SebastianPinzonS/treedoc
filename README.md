@@ -1,82 +1,124 @@
-# Treedoc Equipo
+# Tree Doc — operation-based
 
-Implementación inicial independiente en Elixir para editar un documento compartido.
-Adopta CPD v1 del borrador de Carla del 22 de noviembre de 2026: Treedoc,
-deltas por edición y estados completos periódicos. Sin dependencias externas.
+A distributed console editor written in Elixir. It uses causal operations,
+`[{bit, seq, node}]` positions, vector clocks, deduplication, and history replay.
+The replica registers as `Crdt.Replica`.
 
-## Estado del proyecto
+## Running the project
 
-Incluye núcleo CRDT, validación del contrato, réplica GenServer supervisada,
-API de consola y pruebas automatizadas. Es una base de implementación, no una
-entrega completa de Overleaf. El código de los otros equipos no se modifica.
-
-- [Comparación de las cuatro implementaciones](docs/COMPARACION.md).
-- [Contrato de red y API local](docs/CONTRATO.md).
-- [Validación y pendientes para laboratorio](docs/VALIDACION.md).
-
-## Ejecutar
-
-Requiere Elixir >= 1.18 y < 2.0 con una versión compatible de Erlang/OTP.
-No se necesita Nerves para desarrollar ni para ejecutarlo sobre Raspberry Pi OS.
+Elixir >= 1.18 and < 2.0 with a compatible OTP version. The core has no Hex dependencies.
 
 ```sh
-mix compile --warnings-as-errors
-mix test
-iex --name doc@TU_IP --cookie cpd2026 -S mix
-```
-
-Reemplaza `TU_IP` por la IPv4 real. En IEx:
-
-```elixir
-Node.connect(:"doc@IP_DEL_OTRO")
-Node.list()
-TreedocEquipo.insert(0, "H")
-TreedocEquipo.insert(1, "á")
-TreedocEquipo.text()
-TreedocEquipo.delete(0)
-TreedocEquipo.state()
-TreedocEquipo.sync()
-```
-
-Cada inserción acepta **un grafema**. Los índices empiezan en cero; un emoji
-compuesto cuenta como un grafema. `insert/2` y `delete/1` devuelven `:ok` o
-`{:error, motivo}`. Son llamadas locales, no un contrato RPC entre grupos.
-
-Para dos nodos en un computador, usa dos terminales con nombres diferentes:
-
-```sh
+./scripts/check.sh
 iex --name equipo1@127.0.0.1 --cookie cpd2026 -S mix
+```
+
+In another terminal, from the same project:
+
+```sh
 iex --name equipo2@127.0.0.1 --cookie cpd2026 -S mix
 ```
 
-Desde el primero: `Node.connect(:"equipo2@127.0.0.1")`. Escribe en ambos y
-consulta `TreedocEquipo.text()`. Cada VM tiene su propio proceso `:cpd_doc`.
-La cookie del curso sirve para una red de laboratorio de confianza.
+On the first node:
 
-## Comparar con las descargas
-
-Conservando la estructura actual de carpetas:
-
-```sh
-mix run scripts/compare_references.exs ..
+```elixir
+Node.connect(:"equipo2@127.0.0.1")
+TreeDoc.insert(0, "H")
+TreeDoc.insert(1, "i")
+TreeDoc.text()
+TreeDoc.delete(0)
+TreeDoc.state() # Document, clock, pending operations, and history
+TreeDoc.sync()  # Broadcasts history without waiting for acknowledgments
 ```
 
-El script carga únicamente los módulos puros de Carla y Andrés, sin sus
-aplicaciones Nerves. Comprueba intercambio en ambos sentidos y reproduce las
-diferencias `max/min` y validación de caracteres. No cambia las referencias.
-Los resultados esperados de incompatibilidad son hallazgos, no errores de la prueba.
+On different machines, replace the loopback address with their actual IP addresses.
+`insert/2` accepts one grapheme; indices are zero-based. Each node saves its history
+under `data/`, configurable through `TREEDOC_DATA_DIR`.
 
-## Límites actuales
+## Identity and persistence
 
-El estado vive en memoria: reiniciar pierde las ediciones que no conserve otro
-nodo. Una nueva encarnación aleatoria de 128 bits reduce el riesgo de repetir
-identificadores, pero no reemplaza la persistencia. No hay firmware Nerves,
-interfaz web, LaTeX, discovery automático, balanceo ni recolección de tombstones.
-El árbol simple puede producir mensajes grandes al escribir textos largos.
+Keep the node name and its data directory when restarting. Do not delete history
+and reuse the same name in a cluster that still remembers its operations:
+reused sequence numbers would be discarded as duplicates. Use a new node name
+for a new replica with no history. Do not run two replicas with the same identity
+or sharing the same history file.
 
-La sincronización completa cada 30 s permite reparar deltas perdidos mientras
-exista una réplica con esos cambios y vuelvan a entregarse mensajes. No es una
-confirmación de entrega durable. Los nodos deben conectarse con `Node.connect/1`.
+Changes are persisted before being acknowledged or broadcast. The file is a binary
+ETF snapshot of history, written with fsync and replaced using rename. It is not
+a JSONL log and does not, by itself, guarantee recovery from every power failure
+(the directory is not synchronized). A corrupt file prevents startup.
 
-Repositorio Git local creado en `treedoc-equipo/`, rama `main`. No se ha creado
-ni publicado un repositorio remoto.
+## Status
+
+Direct compilation with `elixirc --warnings-as-errors` and 11 op-based tests passed.
+Five additional firmware tests passed, covering discovery, host startup, and
+target configuration. Real network tests and Raspberry Pi deployment remain pending.
+
+There is no graphical interface, LaTeX integration, balancing, or compaction.
+History and tombstones grow; saving and retransmitting the entire history is an
+initial solution. The repository is local and has not been published to GitHub.
+
+## Flashing a Raspberry Pi
+
+The firmware targets **Raspberry Pi 4 Model B** (`rpi4`). Confirm your board model
+before proceeding. The image has not yet been built or validated on hardware.
+
+Install the [Nerves prerequisites](https://nerves.hexdocs.pm/installation.html),
+including `fwup`, compatible Erlang/Elixir versions, and the bootstrap archive:
+
+```bash
+mix local.hex
+mix local.rebar
+mix archive.install hex nerves_bootstrap
+```
+
+From the repository root, prepare your local configuration:
+
+```bash
+cd firmware
+cp -n .env.example .env
+chmod 600 .env
+```
+
+Edit `.env` with your Wi-Fi credentials and the path to an existing **public** SSH key:
+
+```bash
+MIX_TARGET=rpi4
+TREEDOC_WIFI_SSID='router-name'
+TREEDOC_WIFI_PSK='router-password'
+TREEDOC_SSH_KEYS="$HOME/.ssh/id_ed25519.pub"
+```
+
+Build the firmware:
+
+```bash
+./mix-env deps.get
+./mix-env firmware
+```
+
+Insert the microSD into your computer and run:
+
+```bash
+./mix-env firmware.burn
+```
+
+Check the selected device before confirming: **flashing overwrites the card**.
+Once complete, safely eject it, insert it into the Pi, and power the Pi on.
+
+Find the Pi's IP address in your router and connect, replacing the example IP:
+
+```bash
+ssh -i ~/.ssh/id_ed25519 user@192.168.1.20
+```
+
+SSH opens an IEx console. Check the node and document:
+
+```elixir
+node()
+Node.list()
+TreeDoc.text()
+```
+
+Use the same `/24` network for all nodes, disable router client isolation, and
+reserve the Pi's IP through DHCP. History is stored in `/data/tree_doc`.
+See [firmware/README.md](firmware/README.md) for configuration details and limitations.
