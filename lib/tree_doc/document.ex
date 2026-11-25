@@ -15,6 +15,33 @@ defmodule TreeDoc.Document do
 
   def text(doc), do: Enum.map_join(visible(doc), &elem(&1, 1))
 
+  def prepare(doc, {:delete_id, id}, _dot) do
+    if Map.has_key?(doc.atoms, id),
+      do: {:ok, %{op: :del, pos: id}},
+      else: {:error, :unknown_position}
+  end
+
+  def prepare(doc, {:insert_after, left, char}, {seq, writer}) do
+    if left == [] or Map.has_key?(doc.atoms, left) do
+      # Include tombstones so a deleted anchor remains usable by stale clients.
+      right =
+        doc.atoms
+        |> Map.keys()
+        |> Enum.filter(&less?(left, &1))
+        |> Enum.sort(&less?/2)
+        |> List.first()
+
+      pos =
+        if right != nil and List.starts_with?(right, left),
+          do: right ++ [{0, seq, writer}],
+          else: left ++ [{1, seq, writer}]
+
+      {:ok, %{op: :ins, pos: pos, ch: char}}
+    else
+      {:error, :unknown_position}
+    end
+  end
+
   def prepare(doc, {:insert, index, char}, {seq, writer}) do
     items = visible(doc)
 

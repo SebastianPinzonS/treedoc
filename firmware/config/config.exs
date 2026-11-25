@@ -5,6 +5,9 @@
 # this project.
 import Config
 
+config :nerves, :erlinit,
+  hostname_pattern: "bfs-bandits-treedoc"
+
 # Enable the Nerves integration with Mix
 Application.start(:nerves_bootstrap)
 

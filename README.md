@@ -23,8 +23,8 @@ On the first node:
 
 ```elixir
 Node.connect(:"equipo2@127.0.0.1")
-TreeDoc.insert(0, "H")
-TreeDoc.insert(1, "i")
+TreeDoc.insert(0, "Hi")
+TreeDoc.insert(2, " world!")
 TreeDoc.text()
 TreeDoc.delete(0)
 TreeDoc.state() # Document, clock, pending operations, and history
@@ -32,7 +32,11 @@ TreeDoc.sync()  # Broadcasts history without waiting for acknowledgments
 ```
 
 On different machines, replace the loopback address with their actual IP addresses.
-`insert/2` accepts one grapheme; indices are zero-based. Each node saves its history
+`insert/2` accepts non-empty UTF-8 text, including multiple characters and newlines;
+indices are zero-based and count graphemes. `delete/1` removes one grapheme.
+Each insertion is saved locally as a batch before acknowledgment or broadcast,
+with one causal operation per grapheme for replication. Empty or invalid text
+returns `{:error, :invalid_character}`. Each node saves its history
 under `data/`, configurable through `TREEDOC_DATA_DIR`.
 
 ## Identity and persistence

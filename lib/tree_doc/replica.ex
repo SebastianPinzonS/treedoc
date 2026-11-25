@@ -29,22 +29,79 @@ defmodule TreeDoc.Replica do
   end
 
   @impl true
-  def handle_call({:insert, index, char}, _from, s), do: edit(s, {:insert, index, char})
-  def handle_call({:delete, index}, _from, s), do: edit(s, {:delete, index})
+  def handle_call({:insert, index, text}, _from, s) do
+    requests =
+      if is_integer(index) and is_binary(text) and String.valid?(text) and text != "" do
+        text
+        |> String.graphemes()
+        |> Enum.with_index(index)
+        |> Enum.map(fn {char, position} -> {:insert, position, char} end)
+      else
+        [{:insert, index, text}]
+      end
+
+    edit(s, requests)
+  end
+
+  def handle_call({:delete, index}, _from, s), do: edit(s, [{:delete, index}])
+
+  def handle_call({:edit, %{del: ids, anchor: anchor, ins: text}}, _, s)
+      when is_list(ids) and is_list(anchor) and is_binary(text) do
+    if String.valid?(text) and (anchor == [] or Map.has_key?(s.core.doc.atoms, anchor)) and
+         Enum.all?(ids, &Map.has_key?(s.core.doc.atoms, &1)) do
+      # Each subsequent insertion follows the preceding operation's fresh PosID.
+      inserts =
+        case String.graphemes(text) do
+          [] -> []
+          [first | rest] -> [{:insert_after, anchor, first} | Enum.map(rest, &{:insert_next, &1})]
+        end
+
+      deletes =
+        ids
+        |> Enum.uniq()
+        |> Enum.reject(&MapSet.member?(s.core.doc.tombstones, &1))
+        |> Enum.map(&{:delete_id, &1})
+
+      edit(s, deletes ++ inserts)
+    else
+      {:reply, {:error, :invalid_edit}, s}
+    end
+  end
+
+  def handle_call({:edit, _}, _, s), do: {:reply, {:error, :invalid_edit}, s}
   def handle_call(:text, _, s), do: {:reply, Document.text(s.core.doc), s}
   def handle_call(:state, _, s), do: {:reply, s.core, s}
   def handle_call(_, _, s), do: {:reply, {:error, :unknown_call}, s}
 
-  defp edit(s, request) do
-    seq = Map.get(s.core.vc, s.me, 0) + 1
+  defp edit(s, requests) do
+    result =
+      Enum.reduce_while(requests, {:ok, s.core, [], nil}, fn request,
+                                                             {:ok, core, batches, last_pos} ->
+        seq = Map.get(core.vc, s.me, 0) + 1
 
-    case Document.prepare(s.core.doc, request, {seq, s.me}) do
+        request =
+          case request do
+            {:insert_next, ch} -> {:insert_after, last_pos, ch}
+            other -> other
+          end
+
+        case Document.prepare(core.doc, request, {seq, s.me}) do
+          {:error, _} = error ->
+            {:halt, error}
+
+          {:ok, operation} ->
+            op = Map.merge(operation, %{from: s.me, vc: Map.put(core.vc, s.me, seq)})
+            {next, applied} = Causal.receive_op(core, op)
+            {:cont, {:ok, next, [applied | batches], op.pos}}
+        end
+      end)
+
+    case result do
       {:error, _} = error ->
         {:reply, error, s}
 
-      {:ok, operation} ->
-        op = Map.merge(operation, %{from: s.me, vc: Map.put(s.core.vc, s.me, seq)})
-        {core, applied} = Causal.receive_op(s.core, op)
+      {:ok, core, batches, _last_pos} ->
+        applied = batches |> Enum.reverse() |> List.flatten()
 
         case persist(s, core, applied) do
           {:ok, next} -> {:reply, :ok, next}
