@@ -58,9 +58,43 @@ Direct compilation with `elixirc --warnings-as-errors` and 11 op-based tests pas
 Five additional firmware tests passed, covering discovery, host startup, and
 target configuration. Real network tests and Raspberry Pi deployment remain pending.
 
-There is no graphical interface, LaTeX integration, balancing, or compaction.
+There is a local web editor; LaTeX integration, balancing, and compaction are not implemented.
 History and tombstones grow; saving and retransmitting the entire history is an
 initial solution. The repository is local and has not been published to GitHub.
+
+## Web editor
+
+Start the project with `iex --name laptop@<your-ip> --cookie cpd2026 -S mix`, then:
+
+```elixir
+TreeDoc.Web.start() # http://localhost:4000
+```
+
+The Document tab edits this node's shared document. State, Nodes, and Raw inspect
+the replica and its history. Connected peers supporting the same read calls can
+be inspected through the selector; other implementations may not expose these views.
+Editing and replication still use the existing persisted insert/delete operations.
+
+On the Pi, after its replica starts, use `TreeDoc.Web.start(ip: {0, 0, 0, 0})`
+and visit `http://<pi-ip>:4000`. This editor has no authentication; bind it to a
+trusted network only. Starting the web server is optional and does not change discovery.
+
+The client polls every 400 ms and sends PosIDs instead of shifting text indices.
+`POST /edit` accepts `{del, after, ins, seq}`, where `seq` is the local author's
+sequence from `GET /state`. Remote authors may advance independently. If another
+local client has edited, or a previous POST committed but its reply was lost,
+the server returns 409 instead of repeating the insertion. The page preserves
+the draft and pauses: copy any pending text before choosing **Discard draft and
+load server text**. Rejected edits also preserve the draft. Pending typing that
+overlaps a remote change follows the supplied client's server-wins rebase policy.
+The initial document loads before typing is enabled.
+
+Validation:
+
+```sh
+mix test --warnings-as-errors
+node --test test/web_client_test.cjs
+```
 
 ## Flashing a Raspberry Pi
 

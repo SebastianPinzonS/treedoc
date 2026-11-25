@@ -45,6 +45,14 @@ defmodule TreeDoc.Replica do
 
   def handle_call({:delete, index}, _from, s), do: edit(s, [{:delete, index}])
 
+  # Guard browser retries against duplicate insertions after a lost HTTP reply.
+  # Remote authors may advance independently; only this author's sequence matters.
+  def handle_call({:web_edit, seq, change}, from, s) do
+    if seq == Map.get(s.core.vc, s.me, 0),
+      do: handle_call({:edit, change}, from, s),
+      else: {:reply, {:error, :stale_edit}, s}
+  end
+
   def handle_call({:edit, %{del: ids, anchor: anchor, ins: text}}, _, s)
       when is_list(ids) and is_list(anchor) and is_binary(text) do
     if String.valid?(text) and (anchor == [] or Map.has_key?(s.core.doc.atoms, anchor)) and
@@ -71,7 +79,45 @@ defmodule TreeDoc.Replica do
   def handle_call({:edit, _}, _, s), do: {:reply, {:error, :invalid_edit}, s}
   def handle_call(:text, _, s), do: {:reply, Document.text(s.core.doc), s}
   def handle_call(:state, _, s), do: {:reply, s.core, s}
+  def handle_call(:history, _, s), do: {:reply, s.core.history, s}
+  def handle_call(:debug, _, s), do: {:reply, rows(s), s}
+  def handle_call(:status, _, s), do: {:reply, status(s), s}
+  def handle_call(:snapshot, _, s), do: {:reply, %{status: status(s), rows: rows(s)}, s}
   def handle_call(_, _, s), do: {:reply, {:error, :unknown_call}, s}
+
+  defp rows(s) do
+    s.core.doc.atoms
+    |> Enum.sort(fn {a, _}, {b, _} -> Document.less?(a, b) end)
+    |> Enum.map(fn {id, ch} -> {ch, id, MapSet.member?(s.core.doc.tombstones, id)} end)
+  end
+
+  defp status(s) do
+    waiting =
+      for {{from, seq}, op} <- s.core.pending do
+        missing =
+          Enum.reduce(op.vc, %{}, fn {author, n}, acc ->
+            needed = if author == from, do: n - 1, else: n
+            if needed > Map.get(s.core.vc, author, 0), do: Map.put(acc, author, needed), else: acc
+          end)
+
+        {from, seq, missing}
+      end
+
+    %{
+      author: s.me,
+      peers: Node.list(),
+      clock: s.core.vc,
+      history: length(s.core.history),
+      chars: map_size(s.core.doc.atoms),
+      dead: MapSet.size(s.core.doc.tombstones),
+      waiting: waiting,
+      file: s.path,
+      blocked: false,
+      received: nil,
+      duplicates: nil,
+      ignored: nil
+    }
+  end
 
   defp edit(s, requests) do
     result =
